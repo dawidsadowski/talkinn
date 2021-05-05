@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   	<meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+		<meta name="theme-color" content="#191919" />
+    <title>Talkinn</title>
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+		<link rel="shortcut icon" href="img/favicon.jpg" />
+</head>
+
+<body>
+		<div id="menu">
+				<div id="title">
+				<div>Talkinn</div>
+				<div id="subtitle">v0.6.1a-WE</div>
+				</div>
+		</div>
+    <div id="history"></div>
+    <div id="chat">
+				<span class="reset_nick">✏️</span>
+        <input type="text" id="msg_text" name="msg_text" placeholder="Wpisz wiadomość" autocomplete="off" />
+				<span class="emoji">👍</span>
+    </div>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/js-cookie@2.2.1/src/js.cookie.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript">
+
+var user_nick = Cookies.get('nick'),i=0;
+var quick_emoji = "👍";
+var last_user = '';
+
+var snd_msg = new Audio('sounds/Alya.ogg');
+var snd_send = new Audio('sound/Carme.ogg');
+
+while(!user_nick) {
+    user_nick = prompt("Wpisz swój nick:");
+} 
+
+Cookies.set('nick', user_nick);
+
+        var socket = io("/", { query: "user=" + user_nick }).connect();
+				socket.emit("join", user_nick);
+
+$(".reset_nick").click(() => {
+	let new_nick = prompt("Wpisz swój nick:");
+	if(new_nick) {
+		new_nick = new_nick.trim();
+		Cookies.set('nick', new_nick);
+		socket.emit("nick change", {old: user_nick, new: new_nick});
+		user_nick = new_nick;
+  } 
+});
+
+$("#msg_text").on('keyup', function(e) {
+	if(e.which != 13) switchIcons();
+	else {
+		submit();
+		switchIcons(true);
+	} 
+});
+
+$(".emoji").click(function() {
+	if($(this).attr('class') == 'emoji') {
+		socket.emit("emoji", quick_emoji);
+	} else {
+		submit();
+		switchIcons(true);
+	} 
+});
+
+        function submit() {
+            socket.emit("send message", {nick: user_nick, message: $("#msg_text").val().trim()}, function() {
+                // $("#history").append($("<div />").text($("#msg_text").val()).addClass('msg my_msg'));
+								$("#chat #msg_text").val("");
+            });
+						$("#msg_text").focus();
+        }
+
+		socket.on("alert", function(msg) {
+			alert(msg);
+		});
+		
+		socket.on("update messages", function(msg, user){
+		var final_message = '';
+
+		switch(msg.type) {
+		case 'info':
+			final_message = $("<div />").text(msg.msg).addClass('info');
+			if(msg.color) {
+				final_message.css("color", msg.color);
+			} 
+			break;
+		
+		case 'nick':
+			if(user != user_nick && user != last_user) final_message = $("<div />").text(msg.msg).addClass('nick');
+			break;
+
+		case 'emoji':
+			final_message = $("<div />").text(msg.msg).addClass('emoji_msg');
+			if(msg.attr == 'center') final_message.addClass('center');
+			$('.latest').removeClass('latest');
+			if(user == user_nick) final_message.addClass('my_emoji my_last latest');
+			else final_message.addClass('last latest');
+			break;
+
+		default:
+			msg = toEmoji(msg);
+			props = msg.split(':');
+			if(props[0] == 'emoji') {
+				msg = props[1];
+				final_message = $("<div />").text(msg).addClass('emoji_msg');
+				if(user == user_nick) final_message.addClass('my_emoji');
+			} else {
+				final_message = $("<div />").text(msg).addClass('msg');
+				final_message.html(final_message.html().replace("&lt;lol&gt;", '<img src="https://www.gg.pl/images/emoticons/lol.gif" />'));
+
+				if(user == user_nick) {
+					var latest = $('.latest');
+
+					if(latest.length) {
+						if(latest.hasClass('last') || latest.hasClass('emoji_msg') || latest.hasClass('emoji_msg') || latest.hasClass('center') || latest.hasClass('info')) {
+							latest.removeClass('latest');
+							final_message.addClass('latest');
+						} else	if(latest.hasClass('my_last')) {
+							latest.addClass('my_middle').removeClass('my_last latest');
+							final_message.addClass('my_last latest');
+						} else if(latest.hasClass('my_msg')) {
+							latest.addClass('my_first').removeClass('latest');
+							final_message.addClass('my_last latest');
+						} else {
+           		latest.removeClass('latest');
+						} 
+					} else {
+						final_message.addClass('latest');
+					} 
+
+					final_message.addClass('my_msg');
+					if(i > 9) final_message.addClass('golden');
+					snd_send.play();
+				} else {
+					var latest = $('.latest');
+
+					if(latest.length) {
+						if(latest.hasClass('my_last') || latest.hasClass('emoji_msg') || latest.hasClass('emoji_msg') || latest.hasClass('center') || latest.hasClass('info')) {
+							latest.removeClass('latest');
+							final_message.addClass('latest');
+						} else if(latest.hasClass('last')) {
+							latest.addClass('middle').removeClass('last latest');
+							final_message.addClass('last latest');
+						} else {
+							latest.addClass('first').removeClass('latest');
+							final_message.addClass('last latest');
+						} 
+					} else {
+						final_message.addClass('latest');
+					} 
+					snd_msg.play();
+				} 
+			} 
+		} 
+
+		$("#history").append(final_message);
+		last_user = user;
+		// $("#history").scrollTop($("#history")[0].scrollHeight);
+		$("#history").animate({ scrollTop: $("#history")[0].scrollHeight }, 100);
+		// $("#history").scrollBottom();
+		});
+
+
+		$("#title").click(function() {
+			// alert(user_nick);
+				if(i == 9) {
+					// alert("Odblokowałeś Talkinn Fire Edition!");
+					socket.emit("custom message", user_nick + " odblokował Talkinn Fire Edition!");
+					// colorReplace("#0078ff", "#ffd700");
+					$("#subtitle").text("Fire Edition").css("color", "#333");
+					$("#title").css("color", "#ff7700"); // addClass("golden");
+					$(".my_msg").addClass("golden");
+					quick_emoji = "🔥"; 
+					$(".emoji").text(quick_emoji);
+					i++;
+} 
+				else if(i < 9) i++;
+		});
+
+		function switchIcons(emoji) {
+			if($("#msg_text").val().length && !emoji) {
+		$(".emoji").text("📨️");
+		$(".emoji").toggleClass('send emoji');
+	} else {
+		$(".send").text(quick_emoji);
+		$(".send").toggleClass('send emoji');
+	}
+		} 
+
+function toEmoji(str) {
+	emojis = {
+		':)' : '🙂', 
+		':(' : '🙁', 
+  	';(' : '😠', 
+		':o' : '😮', 
+		':z' : '😖', 
+		'B)' : '😎', 
+		':/' : '😕', 
+		';)' : '😉', 
+		';p' : '😜', 
+		':p' : '😛', 
+		'o_O' : '🤨', 
+		':D' : '😀', 
+		':*' : '😗', 
+		';*' : '😘', 
+		'>)' : '😈', 
+		'>(' : '👿', 
+    '</3' : '💔',
+		'<3' : '❤️', 
+    '(y)' : '👍'
+	};
+
+	for(const [key, value] of Object.entries(emojis)) {
+		str = str.replace(key, value).replace(key.toUpperCase(), value);
+		if(str == value) {
+			str = 'emoji:' + str;
+		} 
+	} 
+
+	return str;
+} 
+
+function colorReplace(findHexColor, replaceWith) { // Convert rgb color strings to hex // REF: https://stackoverflow.com/a/3627747/1938889 
+function rgb2hex(rgb) { if (/^#[0-9A-F]{6}$/i.test(rgb)) return rgb; rgb = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/); function hex(x) { return ("0" + parseInt(x).toString(16)).slice(-2); } return "#" + hex(rgb[1]) + hex(rgb[2]) + hex(rgb[3]); } // Select and run a map function on every tag 
+$('*').map(function(i, el) { // Get the computed styles of each tag 
+var styles = window.getComputedStyle(el); // Go through each computed style and search for "color" 
+Object.keys(styles).reduce(function(acc, k) { var name = styles[k]; var value = styles.getPropertyValue(name); if (value !== null && name.indexOf("color") >= 0) { // Convert the rgb color to hex and compare with the target color
+ if (value.indexOf("rgb(") >= 0 && rgb2hex(value) === findHexColor) { // Replace the color on this found color attribute 
+$(el).css(name, replaceWith); } } }); }); }
+
+    </script>
+</body>
+
+</html>
