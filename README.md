@@ -1,2 +1,2 @@
 # Talkinn
-You can test it on: https://talkinn.ct8.pl
+You can try it on: https://talkinn.ct8.pl
